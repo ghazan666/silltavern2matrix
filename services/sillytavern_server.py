@@ -6,16 +6,18 @@ from typing import Dict, Any
 import websockets
 from websockets.asyncio.server import ServerConnection
 
-from services import MatrixClient
+from .matrix_client import MatrixClient
+from .event_tracker import EventTracker
 from utils.singleton import SingletonMixin
 
 
 class SillyTavernServer(SingletonMixin):
-    def __init__(self, matrix_client: MatrixClient, cfg, logger: logging.Logger):
+    def __init__(self, matrix_client: MatrixClient, event_tracker: EventTracker, cfg, logger: logging.Logger):
         super().__init__(cfg, logger)
         self.server = None
         self.wss_port = cfg.wss_port
         self.matrix_client = matrix_client
+        self.event_tracker = event_tracker
         self.room_id = ""
         self.ongoing_streams: Dict[str, Dict[str, Any]] = {}
 
@@ -40,23 +42,26 @@ class SillyTavernServer(SingletonMixin):
             self.ongoing_streams.clear()
 
     async def handle_message(self, message: str):
+        if not self.room_id:
+            return
         try:
             data = json.loads(message)
             text = data.get('text', '').rstrip('\n')
             msg_type = data.get('type')
             chat_id = data.get('chatId')
 
-            # 处理最终渲染后的消息更新
-            if msg_type == 'final_message_update' and chat_id:
-                await self.handle_final_message_update(text, chat_id)
-            else:
-                await self.handle_other_message_type(msg_type, text, chat_id)
+            try:
+                # 处理最终渲染后的消息更新
+                if msg_type in ['final_message_update', 'ai_reply'] and chat_id:
+                    await self.handle_final_message_update(text, chat_id)
+                else:
+                    await self.handle_other_message_type(msg_type, text, chat_id)
+            except Exception as e:
+                self.logger.error(f"Unexpected error: {e}")
+                await self.matrix_client.send_text(f"Unexpected error: {e}", self.room_id)
 
         except json.JSONDecodeError as e:
             self.logger.error(f"Failed to parse message: {e}")
-        except Exception as e:
-            self.logger.error(f"Unexpected error: {e}")
-            await self.matrix_client.send_text(f"Unexpected error: {e}", self.room_id)
 
     async def handle_final_message_update(self, text: str, chat_id: str):
         session = self.ongoing_streams.get(chat_id, {})
@@ -64,15 +69,19 @@ class SillyTavernServer(SingletonMixin):
             event_id = session["event_id"]
             await self.matrix_client.edit_text(text, self.room_id, event_id)
         else:
-            await self.matrix_client.send_text(text, self.room_id)
+            event_id = await self.matrix_client.send_text(text, self.room_id)
+            self.event_tracker.track_event_id(self.room_id, event_id)
+
         del self.ongoing_streams[chat_id]
         self.logger.info(f"Sent message {text}")
 
     async def handle_other_message_type(self, msg_type: str, text: str, chat_id: str):
+        event_id = ""
+
         # 错误报告
         if msg_type == 'error_message':
             self.logger.error("Receive error message from SillyTavern.")
-            await self.matrix_client.send_text(text, self.room_id)
+            event_id = await self.matrix_client.send_text(text, self.room_id)
         # 输入中
         if msg_type == 'typing_action':
             event_id = await self.matrix_client.send_text("思考中...", self.room_id)
@@ -80,6 +89,8 @@ class SillyTavernServer(SingletonMixin):
                 self.ongoing_streams[chat_id] = {
                     'event_id': event_id,
                 }
+
+        self.event_tracker.track_event_id(self.room_id, event_id)
 
     async def stop(self):
         if self.server:

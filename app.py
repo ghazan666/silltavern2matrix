@@ -5,7 +5,7 @@ import threading
 from niobot import NioBot, Context, MatrixRoom, RoomMessage
 
 from configs import EnvConfig
-from services import MatrixClient, SillyTavernServer
+from services import MatrixClient, SillyTavernServer, EventTracker
 
 
 logger = EnvConfig.load_logger()
@@ -19,20 +19,50 @@ bot = NioBot(
     owner_id=cfg.mx_owner_id,
 )
 matrix_client = MatrixClient(bot, cfg, logger)
-silly_tavern_server = SillyTavernServer(matrix_client, cfg, logger)
+event_tracker = EventTracker(matrix_client, cfg, logger)
+silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logger)
 
+
+async def send_message_sf(payload: str, room_id: str) -> None:
+    silly_tavern_server.room_id = room_id
+    if silly_tavern_server.server and silly_tavern_server.server.state == 1:
+        await silly_tavern_server.server.send(payload)
+    else:
+        logger.warning("New message received, but SillyTavern server was not connected.")
+        event_id = await matrix_client.send_text(
+            text="抱歉，我现在无法连接到SillyTavern。请确保SillyTavern已打开并启用了扩展。",
+            room_id=room_id,
+        )
+        event_tracker.track_event_id(room_id, event_id)
 
 @bot.command()
 async def ping(ctx: Context) -> None:
-    await ctx.respond("Pong!")
+    bridgeStatus = 'Bridge状态：已连接 ✅'
+    stStatus = 'SillyTavern状态：已连接 ✅' if silly_tavern_server.server and silly_tavern_server.server.state == 1 else 'SillyTavern状态：未连接 ❌'
 
+    await ctx.respond(f"{bridgeStatus}\n{stStatus}")
+
+@bot.command()
+async def listchats(ctx: Context) -> None:
+    payload = json.dumps({
+        "type": 'execute_command',
+        "command": 'listchats',
+        "chatId": ctx.event.event_id
+    })
+    await send_message_sf(payload, ctx.room.room_id)
 
 @bot.on_event("message")
 async def on_message(room: MatrixRoom, event: RoomMessage):
     room_id = room.room_id
     sender = event.sender
-    body = event.source["content"]["body"]
+
+    content = event.source["content"]
+    body = content["body"]
     event_id = event.event_id
+    replaced_event_id = ""
+    if content.get("m.relates_to", "") and content["m.relates_to"]["rel_type"] == "m.replace":
+        replaced_event_id = content["m.relates_to"]["event_id"]
+
     # 忽略bot发出的message
     if sender == cfg.mx_user_id:
         return
@@ -41,27 +71,21 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     # 系统命令由服务器直接处理
     if body.startswith("!"):
         return
+    if event_tracker.has_tracked(event_id):
+        return
+    if replaced_event_id and event_tracker.has_tracked(replaced_event_id):
+        # 如果是重复处理的event，打断并删除后续所有消息
+        await event_tracker.delete_events_after(room_id, replaced_event_id)
 
-    if silly_tavern_server.server and silly_tavern_server.server.state == 1:
-        logger.info("New message received from %s", sender)
-        payload = json.dumps({
-            "type": "user_message",
-            "chatId": event_id,
-            "text": body
-        })
-        silly_tavern_server.room_id = room_id
-        await silly_tavern_server.server.send(payload)
-    else:
-        logger.warning("New message received, but SillyTavern server was not connected.")
-        await bot.room_send(
-            room_id=room_id,
-            message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": "抱歉，我现在无法连接到SillyTavern。请确保SillyTavern已打开并启用了扩展。"
-            },
-            ignore_unverified_devices=cfg.mx_encryption_enabled,
-        )
+    event_tracker.track_event_id(room_id, event_id)
+    payload = json.dumps({
+        "type": "user_message",
+        "chatId": event_id,
+        "text": body
+    })
+
+    logger.info("New message received from %s", sender)
+    await send_message_sf(payload, room_id)
 
 
 async def main() -> None:
