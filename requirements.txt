@@ -1,0 +1,4 @@
+python-dotenv
+nio-bot[cli,e2ee]
+aiohttp
+websockets
