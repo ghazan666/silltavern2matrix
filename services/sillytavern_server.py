@@ -53,7 +53,7 @@ class SillyTavernServer(SingletonMixin):
             try:
                 # 处理最终渲染后的消息更新
                 if msg_type in ['final_message_update', 'ai_reply'] and chat_id:
-                    await self.handle_final_message_update(text, chat_id)
+                    await self.handle_final_message_update(msg_type, text, chat_id)
                 else:
                     await self.handle_other_message_type(msg_type, text, chat_id)
             except Exception as e:
@@ -63,25 +63,28 @@ class SillyTavernServer(SingletonMixin):
         except json.JSONDecodeError as e:
             self.logger.error(f"Failed to parse message: {e}")
 
-    async def handle_final_message_update(self, text: str, chat_id: str):
+    async def handle_final_message_update(self, msg_type:str, text: str, chat_id: str):
         session = self.ongoing_streams.get(chat_id, {})
         if session:
             event_id = session["event_id"]
             await self.matrix_client.edit_text(text, self.room_id, event_id)
         else:
             event_id = await self.matrix_client.send_text(text, self.room_id)
+
+        if msg_type == 'final_message_update':
             self.event_tracker.track_event_id(self.room_id, event_id)
+        else:
+            self.event_tracker.track_trash_event_id(event_id)
 
         del self.ongoing_streams[chat_id]
         self.logger.info(f"Sent message {text}")
 
     async def handle_other_message_type(self, msg_type: str, text: str, chat_id: str):
-        event_id = ""
-
         # 错误报告
         if msg_type == 'error_message':
             self.logger.error("Receive error message from SillyTavern.")
             event_id = await self.matrix_client.send_text(text, self.room_id)
+            self.event_tracker.track_event_id(self.room_id, event_id)
         # 输入中
         if msg_type == 'typing_action':
             event_id = await self.matrix_client.send_text("思考中...", self.room_id)
@@ -89,8 +92,6 @@ class SillyTavernServer(SingletonMixin):
                 self.ongoing_streams[chat_id] = {
                     'event_id': event_id,
                 }
-
-        self.event_tracker.track_event_id(self.room_id, event_id)
 
     async def stop(self):
         if self.server:

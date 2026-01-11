@@ -23,17 +23,28 @@ event_tracker = EventTracker(matrix_client, cfg, logger)
 silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logger)
 
 
-async def send_message_sf(payload: str, room_id: str) -> None:
+async def send_message_sf(payload: str, room_id: str, event_id: str="") -> None:
     silly_tavern_server.room_id = room_id
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
+        event_tracker.track_event_id(room_id, event_id)
     else:
         logger.warning("New message received, but SillyTavern server was not connected.")
-        event_id = await matrix_client.send_text(
+        error_event_id = await matrix_client.send_text(
             text="抱歉，我现在无法连接到SillyTavern。请确保SillyTavern已打开并启用了扩展。",
             room_id=room_id,
         )
-        event_tracker.track_event_id(room_id, event_id)
+        event_tracker.track_trash_event_id(event_id)
+        event_tracker.track_trash_event_id(error_event_id)
+
+async def delmessages(room_id: str, event_id: str, num: int) -> None:
+    payload = json.dumps({
+            "type": 'execute_command',
+            "command": 'del',
+            "chatId": event_id,
+            "args": num
+        })
+    await send_message_sf(payload, room_id, event_id)
 
 @bot.command()
 async def ping(ctx: Context) -> None:
@@ -49,7 +60,20 @@ async def listchats(ctx: Context) -> None:
         "command": 'listchats',
         "chatId": ctx.event.event_id
     })
-    await send_message_sf(payload, ctx.room.room_id)
+    await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
+async def delmode(ctx: Context, num: int) -> None:
+    await event_tracker.delete_events_after(ctx.room.room_id, num = num)
+    await delmessages(ctx.room.room_id, ctx.event.event_id, num)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
+async def cleartrash(ctx: Context) -> None:
+    await event_tracker.clear_trash_events(ctx.room.room_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 @bot.on_event("message")
 async def on_message(room: MatrixRoom, event: RoomMessage):
@@ -73,11 +97,12 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
         return
     if event_tracker.has_tracked(event_id):
         return
+
     if replaced_event_id and event_tracker.has_tracked(replaced_event_id):
         # 如果是重复处理的event，打断并删除后续所有消息
-        await event_tracker.delete_events_after(room_id, replaced_event_id)
+        del_num = await event_tracker.delete_events_after(room_id, replaced_event_id)
+        await delmessages(room_id, event.event_id, del_num)
 
-    event_tracker.track_event_id(room_id, event_id)
     payload = json.dumps({
         "type": "user_message",
         "chatId": event_id,
@@ -85,7 +110,7 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     })
 
     logger.info("New message received from %s", sender)
-    await send_message_sf(payload, room_id)
+    await send_message_sf(payload, room_id, event_id)
 
 
 async def main() -> None:
