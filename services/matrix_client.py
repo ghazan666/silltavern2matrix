@@ -100,6 +100,17 @@ class MatrixClient(SingletonMixin):
 
         return getattr(response, "event_id", "")
 
+    async def delete_text(self, text: str, room_id: str, event_id: str) -> str:
+        return await self._run_in_matrix_loop(self._delete_text(text, room_id, event_id))
+
+    async def _delete_text(self, text: str, room_id: str, event_id: str) -> str:
+        response =  await self.bot.delete_message(
+            room=room_id,
+            message_id=event_id,
+        )
+
+        return getattr(response, "event_id", "")
+
     async def send_in_loop(self, room_id: str, payload: MediaPayload) -> str:
         return await self._run_in_matrix_loop(self._send(room_id, payload))
 
