@@ -54,6 +54,17 @@ async def ping(ctx: Context) -> None:
     await ctx.respond(f"{bridgeStatus}\n{stStatus}")
 
 @bot.command()
+async def newchat(ctx: Context) -> None:
+    payload = json.dumps({
+        "type": 'execute_command',
+        "command": 'new',
+        "chatId": ctx.event.event_id
+    })
+    await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
 async def listchats(ctx: Context) -> None:
     payload = json.dumps({
         "type": 'execute_command',
@@ -61,6 +72,43 @@ async def listchats(ctx: Context) -> None:
         "chatId": ctx.event.event_id
     })
     await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
+async def switchchat(ctx: Context, inx: str|int) -> None:
+    payload = json.dumps({
+        "type": 'execute_command',
+        "command": 'switchchat',
+        "chatId": ctx.event.event_id,
+        "args": inx
+    })
+    await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
+async def listchars(ctx: Context) -> None:
+    payload = json.dumps({
+        "type": 'execute_command',
+        "command": 'listchars',
+        "chatId": ctx.event.event_id
+    })
+    await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+@bot.command()
+async def switchchar(ctx: Context, inx: str|int) -> None:
+    payload = json.dumps({
+        "type": 'execute_command',
+        "command": 'switchchar',
+        "chatId": ctx.event.event_id,
+        "args": inx
+    })
+    await send_message_sf(payload, ctx.room.room_id, ctx.event.event_id)
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 @bot.command()
 async def delmode(ctx: Context, num: int) -> None:
@@ -84,7 +132,7 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     body = content["body"]
     event_id = event.event_id
     replaced_event_id = ""
-    if content.get("m.relates_to", "") and content["m.relates_to"]["rel_type"] == "m.replace":
+    if content.get("m.relates_to", "") and content["m.relates_to"].get("m.rel_type", "") and content["m.relates_to"]["rel_type"] == "m.replace":
         replaced_event_id = content["m.relates_to"]["event_id"]
 
     # 忽略bot发出的message
