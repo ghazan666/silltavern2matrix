@@ -72,6 +72,17 @@ async def ping(ctx: Context) -> None:
 
 
 @bot.command()
+async def imagegen(ctx: Context, text: str) -> None:
+    payload = json.dumps(
+        {"type": "execute_command", "command": "imagine", "chatId": ctx.event.event_id, "args": text}
+    )
+    await send_message_sf(payload, ctx.room.room_id)
+
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+
+
+@bot.command()
 async def newchat(ctx: Context) -> None:
     silly_tavern_server.thread_id = None
     payload = json.dumps({"type": "execute_command", "command": "new", "chatId": ctx.event.event_id})
@@ -91,10 +102,10 @@ async def listchats(ctx: Context) -> None:
 
 
 @bot.command()
-async def switchchat(ctx: Context, inx: str | int) -> None:
+async def switchchat(ctx: Context, inx: int) -> None:
     silly_tavern_server.thread_id = None
     payload = json.dumps(
-        {"type": "execute_command", "command": "switchchat", "chatId": ctx.event.event_id, "args": inx}
+        {"type": "execute_command", "command": f"switchchat_{inx}", "chatId": ctx.event.event_id}
     )
     await send_message_sf(payload, ctx.room.room_id)
 
@@ -112,9 +123,9 @@ async def listchars(ctx: Context) -> None:
 
 
 @bot.command()
-async def switchchar(ctx: Context, inx: str | int) -> None:
+async def switchchar(ctx: Context, inx: int) -> None:
     payload = json.dumps(
-        {"type": "execute_command", "command": "switchchar", "chatId": ctx.event.event_id, "args": inx}
+        {"type": "execute_command", "command": f"switchchar_{inx}", "chatId": ctx.event.event_id}
     )
     await send_message_sf(payload, ctx.room.room_id)
 

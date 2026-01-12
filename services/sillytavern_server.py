@@ -25,7 +25,7 @@ class SillyTavernServer(SingletonMixin):
 
     async def start(self):
         self.logger.info(f"Starting WebSocket server on port {self.wss_port}")
-        async with websockets.serve(self.handle_connection, "localhost", self.wss_port):
+        async with websockets.serve(self.handle_connection, "0.0.0.0", self.wss_port):
             await asyncio.Future()
 
     async def handle_connection(self, ws: ServerConnection):
