@@ -65,15 +65,17 @@ class SillyTavernServer(SingletonMixin):
             self.logger.error(f"Failed to parse message: {e}")
 
     async def handle_final_message_update(self, msg_type:str, text: str, chat_id: str):
+        event_id = ""
         session = self.ongoing_streams.get(chat_id, {})
+
         if session:
             event_id = session["event_id"]
             await self.matrix_client.edit_text(text, self.room_id, event_id)
         else:
             event_id = await self.matrix_client.send_text(text, self.room_id, self.thread_id)
 
-        if msg_type == 'final_message_update':
-            self.event_tracker.track_event_id(self.room_id, event_id)
+        if msg_type == 'final_message_update' and event_id and self.thread_id:
+            self.event_tracker.track_event_id(self.thread_id, event_id)
         else:
             self.event_tracker.track_trash_event_id(event_id)
 
@@ -85,7 +87,8 @@ class SillyTavernServer(SingletonMixin):
         if msg_type == 'error_message':
             self.logger.error("Receive error message from SillyTavern.")
             event_id = await self.matrix_client.send_text(text, self.room_id, self.thread_id)
-            self.event_tracker.track_event_id(self.room_id, event_id)
+            if event_id and self.thread_id:
+                self.event_tracker.track_event_id(self.thread_id, event_id)
         # 输入中
         if msg_type == 'typing_action':
             event_id = await self.matrix_client.send_text("思考中...", self.room_id, self.thread_id)

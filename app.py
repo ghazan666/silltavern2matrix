@@ -25,8 +25,9 @@ silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logge
 
 async def send_message_sf(payload: str, room_id: str, event_id: str="") -> None:
     silly_tavern_server.room_id = room_id
-    if silly_tavern_server.thread_id is None:
-        silly_tavern_server.thread_id = event_id
+    message = json.loads(payload)
+    if silly_tavern_server.thread_id is None and message.get("type", "") == "user_message":
+        silly_tavern_server.thread_id = {event_id: message.get("text", "")}
 
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
