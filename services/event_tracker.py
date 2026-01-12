@@ -118,7 +118,7 @@ class EventTracker(SingletonMixin):
         self._save_state()
 
     async def delete_events_after(
-        self, room_id: str, thread_id: str | None, event_id: str = "", num: int | None = None
+        self, room_id: str, thread_id: str | None, event_id: str | None = None, num: int | None = None
     ) -> int:
         """Delete all events after the given event_id in the room."""
         if thread_id is None:
@@ -133,7 +133,7 @@ class EventTracker(SingletonMixin):
                     if t_id == thread_id and e_id == event_id:
                         index = i
                         break
-            if num:
+            if num and not event_id:
                 index = len(self.ordered_events) - num - 1
 
             if index is None:
