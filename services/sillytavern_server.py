@@ -70,7 +70,7 @@ class SillyTavernServer(SingletonMixin):
             self.logger.error(f"Failed to parse message: {e}")
 
     async def handle_final_message_update(self, msg_type: str, text: str, chat_id: str):
-        event_id = ""
+        event_id = None
         session = self.ongoing_streams.get(chat_id, {})
 
         if session:
