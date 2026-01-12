@@ -83,7 +83,7 @@ class EventTracker(SingletonMixin):
 
         lines: list[str] = []
         for idx, (thread_id, first_text) in enumerate(self.thread.items(), start=1):
-            lines.append(f"{idx}. **{thread_id}** - {first_text}")
+            lines.append(f"{idx}. thread_id:\n**{thread_id}**\nfirst_text:\n{first_text}\n\n\n")
 
         return "\n".join(lines)
 
@@ -128,13 +128,16 @@ class EventTracker(SingletonMixin):
 
         try:
             # Find the index of the event
-            if event_id:
+            if event_id is not None:
                 for i, (t_id, e_id) in enumerate(self.ordered_events):
                     if t_id == thread_id and e_id == event_id:
                         index = i
                         break
-            if num and not event_id:
+            elif num is not None and event_id is None:
                 index = len(self.ordered_events) - num - 1
+            else:
+                self.logger.error("Either event_id or num must be provided.")
+                return 0
 
             if index is None:
                 return 0
