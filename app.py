@@ -26,15 +26,15 @@ silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logge
 async def send_message_sf(payload: str, room_id: str, event_id: str = "") -> None:
     silly_tavern_server.room_id = room_id
     message = json.loads(payload)
-    if silly_tavern_server.thread_id is None and message.get("type", "") == "user_message":
-        # 记录当前会话所在的 Matrix 线程根 event_id
-        first_text = message.get("text", "")
-        silly_tavern_server.thread_id = event_id
-        # 同时在 EventTracker 中注册该线程，供后续列出
-        event_tracker.register_thread(event_id, first_text)
 
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
+        if silly_tavern_server.thread_id is None and message.get("type", "") == "user_message":
+            # 记录当前会话所在的 Matrix 线程根 event_id
+            first_text = message.get("text", "")
+            silly_tavern_server.thread_id = event_id
+            # 同时在 EventTracker 中注册该线程，供后续列出
+            event_tracker.register_thread(event_id, first_text)
         event_tracker.track_event_id(silly_tavern_server.thread_id, event_id)
     else:
         logger.warning("New message received, but SillyTavern server was not connected.")
@@ -156,6 +156,8 @@ async def removethread(ctx: Context, thread_id: str) -> None:
     del event_tracker.thread[thread_id]
     event_tracker._save_state()
     await ctx.respond(f"已删除线程ID：{thread_id}。")
+
+    await newchat(ctx)
 
     await asyncio.sleep(1)
     await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
