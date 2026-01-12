@@ -73,7 +73,7 @@ class MatrixClient(SingletonMixin):
         return await asyncio.wrap_future(future)
 
     async def send_text(self, text: str, room_id: str | None, thread_id: str | None = None) -> str | None:
-        if room_id:
+        if room_id is not None:
             return await self._run_in_matrix_loop(self._send_text(text, room_id, thread_id))
 
     async def _send_text(self, text: str, room_id: str, thread_id: str | None = None) -> str:
@@ -98,7 +98,7 @@ class MatrixClient(SingletonMixin):
         return getattr(response, "event_id", "")
 
     async def edit_text(self, text: str, room_id: str | None, event_id: str) -> str | None:
-        if room_id:
+        if room_id is not None:
             return await self._run_in_matrix_loop(self._edit_text(text, room_id, event_id))
 
     async def _edit_text(self, text: str, room_id: str, event_id: str) -> str:
@@ -107,7 +107,7 @@ class MatrixClient(SingletonMixin):
         return getattr(response, "event_id", "")
 
     async def delete_text(self, room_id: str | None, event_id: str) -> str | None:
-        if room_id:
+        if room_id is not None:
             return await self._run_in_matrix_loop(self._delete_text(room_id, event_id))
 
     async def _delete_text(self, room_id: str, event_id: str) -> str:
@@ -119,7 +119,7 @@ class MatrixClient(SingletonMixin):
         return getattr(response, "event_id", "")
 
     async def send_in_loop(self, room_id: str | None, payload: MediaPayload) -> str | None:
-        if room_id:
+        if room_id is not None:
             return await self._run_in_matrix_loop(self._send(room_id, payload))
 
     async def _send(self, room_id: str, payload: MediaPayload) -> str:

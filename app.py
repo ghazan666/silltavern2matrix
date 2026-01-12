@@ -64,8 +64,11 @@ async def ping(ctx: Context) -> None:
         else "SillyTavern状态：未连接 ❌"
     )
 
-    event_id = (await ctx.respond(f"{bridgeStatus}\n{stStatus}")).ctx.event.event_id
+    event_id = await matrix_client.send_text(f"{bridgeStatus}\n{stStatus}", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
+
+    await asyncio.sleep(1)
+    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 
 @bot.command()
@@ -141,7 +144,7 @@ async def cleartrash(ctx: Context) -> None:
 @bot.command()
 async def listthreads(ctx: Context) -> None:
     threads_md = event_tracker.list_threads_markdown()
-    event_id = (await ctx.respond(f"已知会话线程列表：\n{threads_md}")).ctx.event.event_id
+    event_id = await matrix_client.send_text(f"已知会话线程列表：\n{threads_md}", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
 
     await asyncio.sleep(1)
@@ -151,19 +154,19 @@ async def listthreads(ctx: Context) -> None:
 @bot.command()
 async def removethread(ctx: Context, thread_id: str) -> None:
     if not thread_id:
-        event_id = (await ctx.respond("请提供要删除的线程ID。")).ctx.event.event_id
+        event_id = await matrix_client.send_text("请提供要删除的线程ID。", ctx.room.room_id)
         event_tracker.track_trash_event_id(event_id)
         return
 
     if thread_id not in event_tracker.thread:
-        event_id = (await ctx.respond("未找到线程ID。")).ctx.event.event_id
+        event_id = await matrix_client.send_text("未找到线程ID。", ctx.room.room_id)
         event_tracker.track_trash_event_id(event_id)
         return
 
     await event_tracker.delete_events_after(ctx.room.room_id, thread_id, num=len(event_tracker.ordered_events))
     del event_tracker.thread[thread_id]
     event_tracker._save_state()
-    event_id = (await ctx.respond("已删除线程ID。")).ctx.event.event_id
+    event_id = await matrix_client.send_text("已删除线程ID。", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
 
     await newchat(ctx)

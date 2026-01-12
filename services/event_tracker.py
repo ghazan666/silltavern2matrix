@@ -83,7 +83,7 @@ class EventTracker(SingletonMixin):
 
         lines: list[str] = []
         for idx, (thread_id, first_text) in enumerate(self.thread.items(), start=1):
-            lines.append(f"{idx}. thread_id:\n**{thread_id}**\nfirst_text:\n{first_text}\n\n\n")
+            lines.append(f"{idx}.\nthread_id:\n**{thread_id}**\nfirst_text:\n{first_text}\n\n\n")
 
         return "\n".join(lines)
 
