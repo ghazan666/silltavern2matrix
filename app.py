@@ -2,6 +2,7 @@ import asyncio
 import json
 import sys
 import threading
+import time
 from niobot import NioBot, Context, MatrixRoom, RoomMessage
 
 from configs import EnvConfig
@@ -190,6 +191,9 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     if content.get("msgtype", "") != "m.text":
         return
     if event_tracker.has_tracked(event_id):
+        return
+    current_time = int(time.time() * 1000)
+    if event.server_timestamp < current_time - 10000:
         return
 
     replaced_event_id = None
