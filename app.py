@@ -2,7 +2,7 @@ import asyncio
 import json
 import sys
 import threading
-from niobot import NioBot, Context, MatrixRoom, RoomMessage
+from niobot import NioBot, Context, MatrixRoom, RoomMessageText
 
 from configs import EnvConfig
 from services import MatrixClient, SillyTavernServer, EventTracker
@@ -168,8 +168,8 @@ async def removethread(ctx: Context, thread_id: str) -> None:
     await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 
-@bot.on_event("message")
-async def on_message(room: MatrixRoom, event: RoomMessage):
+@bot.on_event(RoomMessageText)
+async def on_message(room: MatrixRoom, event: RoomMessageText):
     room_id = room.room_id
     sender = event.sender
 
