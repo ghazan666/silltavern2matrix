@@ -72,24 +72,34 @@ class MatrixClient(SingletonMixin):
         future = asyncio.run_coroutine_threadsafe(coro, self.matrix_loop)
         return await asyncio.wrap_future(future)
 
-    async def send_text(self, text: str, room_id: str) -> str:
-        return await self._run_in_matrix_loop(self._send_text(text, room_id))
+    async def send_text(self, text: str, room_id: str|None, thread_id: str | None = None) -> str|None:
+        if room_id:
+            return await self._run_in_matrix_loop(self._send_text(text, room_id, thread_id))
 
-    async def _send_text(self, text: str, room_id: str) -> str:
+    async def _send_text(self, text: str, room_id: str, thread_id: str | None = None) -> str:
+        content = {
+            "msgtype": "m.text",
+            "body": text,
+        }
+        if thread_id:
+            content["m.relates_to"] = {
+                "rel_type": "m.thread",
+                "event_id": thread_id,
+                "is_falling_back": True,
+            }
+
         response =  await self.bot.room_send(
             room_id=room_id,
             message_type="m.room.message",
-            content={
-                "msgtype": "m.text",
-                "body": text,
-            },
+            content=content,
             ignore_unverified_devices=self.cfg.mx_encryption_enabled,
         )
 
         return getattr(response, "event_id", "")
 
-    async def edit_text(self, text: str, room_id: str, event_id: str) -> str:
-        return await self._run_in_matrix_loop(self._edit_text(text, room_id, event_id))
+    async def edit_text(self, text: str, room_id: str|None, event_id: str) -> str|None:
+        if room_id:
+            return await self._run_in_matrix_loop(self._edit_text(text, room_id, event_id))
 
     async def _edit_text(self, text: str, room_id: str, event_id: str) -> str:
         response =  await self.bot.edit_message(
@@ -100,8 +110,9 @@ class MatrixClient(SingletonMixin):
 
         return getattr(response, "event_id", "")
 
-    async def delete_text(self, room_id: str, event_id: str) -> str:
-        return await self._run_in_matrix_loop(self._delete_text(room_id, event_id))
+    async def delete_text(self, room_id: str|None, event_id: str) -> str|None:
+        if room_id:
+            return await self._run_in_matrix_loop(self._delete_text(room_id, event_id))
 
     async def _delete_text(self, room_id: str, event_id: str) -> str:
         response =  await self.bot.delete_message(
@@ -111,8 +122,9 @@ class MatrixClient(SingletonMixin):
 
         return getattr(response, "event_id", "")
 
-    async def send_in_loop(self, room_id: str, payload: MediaPayload) -> str:
-        return await self._run_in_matrix_loop(self._send(room_id, payload))
+    async def send_in_loop(self, room_id: str|None, payload: MediaPayload) -> str|None:
+        if room_id:
+            return await self._run_in_matrix_loop(self._send(room_id, payload))
 
     async def _send(self, room_id: str, payload: MediaPayload) -> str:
         file_resp, decryption_keys = await self.bot.upload(

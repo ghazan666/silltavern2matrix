@@ -18,7 +18,8 @@ class SillyTavernServer(SingletonMixin):
         self.wss_port = cfg.wss_port
         self.matrix_client = matrix_client
         self.event_tracker = event_tracker
-        self.room_id = ""
+        self.room_id: str | None = None
+        self.thread_id: str | None = None
         self.ongoing_streams: Dict[str, Dict[str, Any]] = {}
 
     async def start(self):
@@ -58,7 +59,7 @@ class SillyTavernServer(SingletonMixin):
                     await self.handle_other_message_type(msg_type, text, chat_id)
             except Exception as e:
                 self.logger.error(f"Unexpected error: {e}")
-                await self.matrix_client.send_text(f"Unexpected error: {e}", self.room_id)
+                await self.matrix_client.send_text(f"Unexpected error: {e}", self.room_id, self.thread_id)
 
         except json.JSONDecodeError as e:
             self.logger.error(f"Failed to parse message: {e}")
@@ -69,7 +70,7 @@ class SillyTavernServer(SingletonMixin):
             event_id = session["event_id"]
             await self.matrix_client.edit_text(text, self.room_id, event_id)
         else:
-            event_id = await self.matrix_client.send_text(text, self.room_id)
+            event_id = await self.matrix_client.send_text(text, self.room_id, self.thread_id)
 
         if msg_type == 'final_message_update':
             self.event_tracker.track_event_id(self.room_id, event_id)
@@ -83,11 +84,11 @@ class SillyTavernServer(SingletonMixin):
         # 错误报告
         if msg_type == 'error_message':
             self.logger.error("Receive error message from SillyTavern.")
-            event_id = await self.matrix_client.send_text(text, self.room_id)
+            event_id = await self.matrix_client.send_text(text, self.room_id, self.thread_id)
             self.event_tracker.track_event_id(self.room_id, event_id)
         # 输入中
         if msg_type == 'typing_action':
-            event_id = await self.matrix_client.send_text("思考中...", self.room_id)
+            event_id = await self.matrix_client.send_text("思考中...", self.room_id, self.thread_id)
             if chat_id not in self.ongoing_streams:
                 self.ongoing_streams[chat_id] = {
                     'event_id': event_id,

@@ -25,6 +25,9 @@ silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logge
 
 async def send_message_sf(payload: str, room_id: str, event_id: str="") -> None:
     silly_tavern_server.room_id = room_id
+    if silly_tavern_server.thread_id is None:
+        silly_tavern_server.thread_id = event_id
+
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
         event_tracker.track_event_id(room_id, event_id)
@@ -55,6 +58,7 @@ async def ping(ctx: Context) -> None:
 
 @bot.command()
 async def newchat(ctx: Context) -> None:
+    silly_tavern_server.thread_id = None
     payload = json.dumps({
         "type": 'execute_command',
         "command": 'new',
@@ -77,6 +81,7 @@ async def listchats(ctx: Context) -> None:
 
 @bot.command()
 async def switchchat(ctx: Context, inx: str|int) -> None:
+    silly_tavern_server.thread_id = None
     payload = json.dumps({
         "type": 'execute_command',
         "command": 'switchchat',
@@ -112,7 +117,7 @@ async def switchchar(ctx: Context, inx: str|int) -> None:
 
 @bot.command()
 async def delmode(ctx: Context, num: int) -> None:
-    await event_tracker.delete_events_after(ctx.room.room_id, num = num)
+    await event_tracker.delete_events_after(ctx.room.room_id, silly_tavern_server.thread_id, num = num)
     await delmessages(ctx.room.room_id, ctx.event.event_id, num)
     await asyncio.sleep(1)
     await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
