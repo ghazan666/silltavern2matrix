@@ -17,6 +17,8 @@ class EventTracker(SingletonMixin):
         self.tracked_events: Set[str] = set()
         self.trash_events: Set[str] = set()
         self.ordered_events: deque[Tuple[str, str]] = deque()
+        # 记录每个线程的首条用户消息文本：{thread_id: first_text}
+        self.thread: dict[str, str] = {}
         self._storage_path = os.path.join(self.cfg.mx_store_path, "event_tracker.json")
         self._load_state()
 
@@ -39,6 +41,10 @@ class EventTracker(SingletonMixin):
 
             trash_list = data.get("trash_events", [])
             self.trash_events = set(str(e) for e in trash_list)
+
+            thread_meta = data.get("thread", {}) or data.get("thread_first_text", {})
+            # 保持插入顺序，便于按创建顺序列出
+            self.thread = {str(tid): str(txt) for tid, txt in thread_meta.items()}
         except Exception as e:
             self.logger.error(f"Failed to load event tracker state: {e}")
 
@@ -49,16 +55,44 @@ class EventTracker(SingletonMixin):
                 "ordered_events": list(self.ordered_events),
                 "tracked_events": list(self.tracked_events),
                 "trash_events": list(self.trash_events),
+                "thread": self.thread,
             }
             with open(self._storage_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
         except Exception as e:
             self.logger.error(f"Failed to save event tracker state: {e}")
 
+    def register_thread(self, thread_id: str, first_text: str) -> None:
+        """注册一个新的线程及其首条文本，用于后续列出线程。
+
+        如果线程已存在，则不会覆盖原有的首条文本。
+        """
+        if not thread_id:
+            return
+
+        if thread_id in self.thread:
+            return
+
+        self.thread[thread_id] = first_text
+        self._save_state()
+
+    def list_threads_markdown(self) -> str:
+        """以 markdown+序号 的形式列出所有已知线程（id + first text）。"""
+        if not self.thread:
+            return "暂无会话线程。"
+
+        lines: list[str] = []
+        for idx, (thread_id, first_text) in enumerate(self.thread.items(), start=1):
+            lines.append(f"{idx}. **{thread_id}** - {first_text}")
+
+        return "\n".join(lines)
+
     def has_tracked(self, event_id: str) -> bool:
         return bool(event_id and event_id in self.tracked_events)
 
-    def track_event_id(self, thread_id: str, event_id: str):
+    def track_event_id(self, thread_id: str | None, event_id: str | None):
+        if thread_id is None:
+            return
         if not event_id or self.has_tracked(event_id):
             return
 
@@ -73,7 +107,7 @@ class EventTracker(SingletonMixin):
         self.trash_events.add(event_id)
         self._save_state()
 
-    async def clear_trash_events(self, room_id: str)  -> None:
+    async def clear_trash_events(self, room_id: str) -> None:
         for e_id in self.trash_events:
             try:
                 logging.info("Clearing trash events.")
@@ -83,7 +117,9 @@ class EventTracker(SingletonMixin):
         self.trash_events.clear()
         self._save_state()
 
-    async def delete_events_after(self, room_id: str, thread_id: str|None, event_id: str = "", num: int|None = None)  -> int:
+    async def delete_events_after(
+        self, room_id: str, thread_id: str | None, event_id: str = "", num: int | None = None
+    ) -> int:
         """Delete all events after the given event_id in the room."""
         if thread_id is None:
             logging.info("Conversation not started, skipping deletion.")
@@ -105,7 +141,7 @@ class EventTracker(SingletonMixin):
 
             # Collect events after this index
             events_to_delete = []
-            for t_id, e_id in list(self.ordered_events)[index + 1:]:
+            for t_id, e_id in list(self.ordered_events)[index + 1 :]:
                 if t_id == thread_id:
                     events_to_delete.append(e_id)
 
@@ -117,7 +153,9 @@ class EventTracker(SingletonMixin):
                     self.logger.error(f"Failed to delete event {e_id}: {e}")
 
             # Remove from tracking
-            self.ordered_events = deque((t, e) for t, e in self.ordered_events if not (t == thread_id and e in events_to_delete))
+            self.ordered_events = deque(
+                (t, e) for t, e in self.ordered_events if not (t == thread_id and e in events_to_delete)
+            )
             for e in events_to_delete:
                 self.tracked_events.discard(e)
 

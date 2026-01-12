@@ -72,7 +72,7 @@ class MatrixClient(SingletonMixin):
         future = asyncio.run_coroutine_threadsafe(coro, self.matrix_loop)
         return await asyncio.wrap_future(future)
 
-    async def send_text(self, text: str, room_id: str|None, thread_id: str | None = None) -> str|None:
+    async def send_text(self, text: str, room_id: str | None, thread_id: str | None = None) -> str | None:
         if room_id:
             return await self._run_in_matrix_loop(self._send_text(text, room_id, thread_id))
 
@@ -88,7 +88,7 @@ class MatrixClient(SingletonMixin):
                 "is_falling_back": True,
             }
 
-        response =  await self.bot.room_send(
+        response = await self.bot.room_send(
             room_id=room_id,
             message_type="m.room.message",
             content=content,
@@ -97,32 +97,28 @@ class MatrixClient(SingletonMixin):
 
         return getattr(response, "event_id", "")
 
-    async def edit_text(self, text: str, room_id: str|None, event_id: str) -> str|None:
+    async def edit_text(self, text: str, room_id: str | None, event_id: str) -> str | None:
         if room_id:
             return await self._run_in_matrix_loop(self._edit_text(text, room_id, event_id))
 
     async def _edit_text(self, text: str, room_id: str, event_id: str) -> str:
-        response =  await self.bot.edit_message(
-            room=room_id,
-            message=event_id,
-            content=text
-        )
+        response = await self.bot.edit_message(room=room_id, message=event_id, content=text)
 
         return getattr(response, "event_id", "")
 
-    async def delete_text(self, room_id: str|None, event_id: str) -> str|None:
+    async def delete_text(self, room_id: str | None, event_id: str) -> str | None:
         if room_id:
             return await self._run_in_matrix_loop(self._delete_text(room_id, event_id))
 
     async def _delete_text(self, room_id: str, event_id: str) -> str:
-        response =  await self.bot.delete_message(
+        response = await self.bot.delete_message(
             room=room_id,
             message_id=event_id,
         )
 
         return getattr(response, "event_id", "")
 
-    async def send_in_loop(self, room_id: str|None, payload: MediaPayload) -> str|None:
+    async def send_in_loop(self, room_id: str | None, payload: MediaPayload) -> str | None:
         if room_id:
             return await self._run_in_matrix_loop(self._send(room_id, payload))
 
