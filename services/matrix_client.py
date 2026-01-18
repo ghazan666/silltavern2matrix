@@ -5,7 +5,6 @@ import mimetypes
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Dict
-
 from niobot import NioBot, UploadResponse
 
 from utils import SingletonMixin

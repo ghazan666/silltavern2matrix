@@ -223,6 +223,7 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
 
     logger.info("New message received from %s", sender)
     payload = json.dumps({"type": "user_message", "chatId": event_id, "text": body})
+    await asyncio.sleep(3)
     await send_message_sf(payload, room_id)
 
 

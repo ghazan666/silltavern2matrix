@@ -425,19 +425,8 @@ function handleFinalMessage(lastMessageIdInChatArray) {
             const messageElement = $(`#chat .mes[mesid="${lastMessageIndex}"]`);
 
             if (messageElement.length > 0) {
-                // 获取消息文本元素
-                const messageTextElement = messageElement.find('.mes_text');
-
-                // 获取HTML内容并替换<br>和</p><p>为换行符
-                let renderedText = messageTextElement.html()
-                    .replace(/<br\s*\/?>/gi, '\n')
-                    .replace(/<\/p>\s*<p>/gi, '\n\n')
-                // .replace(/<[^>]*>/g, ''); // 移除所有其他HTML标签
-
-                // 解码HTML实体
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = renderedText;
-                renderedText = tempDiv.textContent;
+                // 获取原始消息文本（保留Markdown格式）
+                let renderedText = lastMessage.mes;
 
                 console.log(`[Telegram Bridge] 捕获到最终渲染文本，准备发送更新到 chatId: ${lastProcessedChatId}`);
 
