@@ -23,7 +23,7 @@ import {
     setExternalAbortController,
 } from "../../../../script.js";
 
-const MODULE_NAME = 'SillyTavern-Telegram-Connector';
+const MODULE_NAME = 'silltavern2matrix';
 const DEFAULT_SETTINGS = {
     bridgeUrl: 'ws://127.0.0.1:2333',
     autoConnect: true,
