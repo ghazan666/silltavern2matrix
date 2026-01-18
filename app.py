@@ -62,6 +62,25 @@ async def delmessages(room_id: str, event_id: str, num: int) -> None:
     await send_message_sf(payload, room_id)
 
 
+def should_ignore_message(sender, content, body, event_id, event: RoomMessage):
+    # 忽略bot发出的message
+    if event.sender == cfg.mx_user_id:
+        return True
+    if content.get("msgtype", "") != "m.text":
+        return True
+    if not body:
+        return True
+    # 系统命令由服务器直接处理
+    if body.startswith("!"):
+        return True
+    if event_tracker.has_tracked(event_id):
+        return True
+    current_time = int(time.time() * 1000)
+    if event.server_timestamp < current_time - 10000:
+        return True
+    return False
+
+
 async def send_message_sf(payload: str, room_id: str) -> None:
     silly_tavern_server.room_id = room_id
     message = json.loads(payload)
@@ -148,6 +167,7 @@ async def delmode(ctx: Context, num: int) -> None:
 async def cleartrash(ctx: Context) -> None:
     await event_tracker.clear_trash_events(ctx.room.room_id)
 
+
 @bot.command()
 @bot_command_delete
 async def listthreads(ctx: Context) -> None:
@@ -157,6 +177,7 @@ async def listthreads(ctx: Context) -> None:
 
 
 @bot.command()
+@bot_command_delete
 async def removethread(ctx: Context, thread_id: str) -> None:
     if not thread_id:
         event_id = await matrix_client.send_text("请提供要删除的线程ID。", ctx.room.room_id)
@@ -176,9 +197,6 @@ async def removethread(ctx: Context, thread_id: str) -> None:
 
     await newchat(ctx.room.room_id, ctx.event.event_id)
 
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
-
 
 @bot.on_event("message")
 async def on_message(room: MatrixRoom, event: RoomMessage):
@@ -188,37 +206,19 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     body = content["body"]
     event_id = event.event_id
 
-    # 忽略bot发出的message
-    if sender == cfg.mx_user_id:
-        return
-    if content.get("msgtype", "") != "m.text":
-        return
-    if not body:
-        return
-    # 系统命令由服务器直接处理
-    if body.startswith("!"):
-        return
-    if event_tracker.has_tracked(event_id):
-        return
-    current_time = int(time.time() * 1000)
-    if event.server_timestamp < current_time - 10000:
+    if should_ignore_message(sender, content, body, event_id, event):
         return
 
     replaced_event_id = None
-    if (
-        content.get("m.relates_to", None)
-        and content["m.relates_to"].get("m.rel_type", None)
-        and content["m.relates_to"]["rel_type"] == "m.replace"
-    ):
+    if content.get("m.relates_to", {}).get("rel_type") == "m.replace":
         replaced_event_id = content["m.relates_to"]["event_id"]
     if replaced_event_id is not None and event_tracker.has_tracked(replaced_event_id):
         # 如果是重复处理的event，打断并删除后续所有消息
         del_num = await event_tracker.delete_events_after(room_id, silly_tavern_server.thread_id, replaced_event_id)
         await delmessages(room_id, event.event_id, del_num)
 
-    payload = json.dumps({"type": "user_message", "chatId": event_id, "text": body})
-
     logger.info("New message received from %s", sender)
+    payload = json.dumps({"type": "user_message", "chatId": event_id, "text": body})
     await send_message_sf(payload, room_id)
 
 
