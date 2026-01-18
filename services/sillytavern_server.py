@@ -55,7 +55,8 @@ class SillyTavernServer(SingletonMixin):
             try:
                 # 处理最终渲染后的消息更新
                 if msg_type in ["final_message_update", "ai_reply"] and chat_id:
-                    await self.handle_final_message_update(msg_type, text, chat_id)
+                    html = data.get("html")
+                    await self.handle_final_message_update(msg_type, text, chat_id, html)
                 else:
                     await self.handle_other_message_type(msg_type, text, chat_id)
             except Exception as e:
@@ -69,18 +70,19 @@ class SillyTavernServer(SingletonMixin):
         except json.JSONDecodeError as e:
             self.logger.error(f"Failed to parse message: {e}")
 
-    async def handle_final_message_update(self, msg_type: str, text: str, chat_id: str):
+    async def handle_final_message_update(self, msg_type: str, text: str, chat_id: str, html: str | None = None):
         event_id = None
         session = self.ongoing_streams.get(chat_id, {})
 
         if session:
             event_id = session["event_id"]
-            await self.matrix_client.edit_text(text, self.room_id, event_id)
+            await self.matrix_client.edit_text(text, self.room_id, event_id, html=html)
         else:
             event_id = await self.matrix_client.send_text(
                 text,
                 self.room_id,
                 self.thread_id,
+                html=html,
             )
 
         if msg_type == "final_message_update":

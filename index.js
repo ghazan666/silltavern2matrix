@@ -425,7 +425,10 @@ function handleFinalMessage(lastMessageIdInChatArray) {
             const messageElement = $(`#chat .mes[mesid="${lastMessageIndex}"]`);
 
             if (messageElement.length > 0) {
-                // 获取原始消息文本（保留Markdown格式）
+                // 获取消息文本元素
+                const messageTextElement = messageElement.find('.mes_text');
+
+                // 获取HTML内容并替换<br>和</p><p>为换行符
                 let renderedText = lastMessage.mes;
 
                 console.log(`[Telegram Bridge] 捕获到最终渲染文本，准备发送更新到 chatId: ${lastProcessedChatId}`);
@@ -437,6 +440,7 @@ function handleFinalMessage(lastMessageIdInChatArray) {
                         type: 'final_message_update',
                         chatId: lastProcessedChatId,
                         text: renderedText,
+                        html: messageTextElement.html(),
                     }));
                     // 重置流式模式标志
                     isStreamingMode = false;
@@ -446,6 +450,7 @@ function handleFinalMessage(lastMessageIdInChatArray) {
                         type: 'ai_reply',
                         chatId: lastProcessedChatId,
                         text: renderedText,
+                        html: messageTextElement.html(),
                     }));
                 }
 
