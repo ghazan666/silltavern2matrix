@@ -85,10 +85,11 @@ class SillyTavernServer(SingletonMixin):
 
         if msg_type == "final_message_update":
             self.event_tracker.track_event_id(self.thread_id, event_id)
+            if session:
+                del self.ongoing_streams[chat_id]
         else:
             self.event_tracker.track_trash_event_id(event_id)
 
-        del self.ongoing_streams[chat_id]
         self.logger.info(f"Sent message {text}")
 
     async def handle_other_message_type(self, msg_type: str, text: str, chat_id: str):

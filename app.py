@@ -62,13 +62,22 @@ async def delmessages(room_id: str, event_id: str, num: int) -> None:
     await send_message_sf(payload, room_id)
 
 
-def should_ignore_message(sender, content, body, event_id, event: RoomMessage):
+async def should_ignore_message(sender, content, body, room_id, event_id, event: RoomMessage):
     # 忽略bot发出的message
-    if event.sender == cfg.mx_user_id:
+    if sender == cfg.mx_user_id:
         return True
     if content.get("msgtype", "") != "m.text":
         return True
     if not body:
+        return True
+    if not(silly_tavern_server.server and silly_tavern_server.server.state == 1):
+        logger.warning("New message received, but SillyTavern server was not connected.")
+        error_event_id = await matrix_client.send_text(
+            text="抱歉，我现在无法连接到SillyTavern。请确保SillyTavern已打开并启用了扩展。",
+            room_id=room_id,
+        )
+        event_tracker.track_trash_event_id(event_id)
+        event_tracker.track_trash_event_id(error_event_id)
         return True
     # 系统命令由服务器直接处理
     if body.startswith("!"):
@@ -90,22 +99,7 @@ async def send_message_sf(payload: str, room_id: str) -> None:
 
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
-        if silly_tavern_server.thread_id is None and message.get("type", "") == "user_message":
-            await newchat(room_id, event_id)
-            # 记录当前会话所在的 Matrix 线程根 event_id
-            first_text = message.get("text", "")
-            silly_tavern_server.thread_id = event_id
-            # 同时在 EventTracker 中注册该线程，供后续列出
-            event_tracker.register_thread(event_id, first_text)
         event_tracker.track_event_id(silly_tavern_server.thread_id, event_id)
-    else:
-        logger.warning("New message received, but SillyTavern server was not connected.")
-        error_event_id = await matrix_client.send_text(
-            text="抱歉，我现在无法连接到SillyTavern。请确保SillyTavern已打开并启用了扩展。",
-            room_id=room_id,
-        )
-        event_tracker.track_trash_event_id(event_id)
-        event_tracker.track_trash_event_id(error_event_id)
 
 
 @bot.command()
@@ -206,8 +200,18 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     body = content["body"]
     event_id = event.event_id
 
-    if should_ignore_message(sender, content, body, event_id, event):
+    if await should_ignore_message(sender, content, body, room_id, event_id, event):
         return
+
+    thread_id = None
+    if content.get("m.relates_to", {}).get("rel_type") == "m.thread":
+        thread_id = content["m.relates_to"]["event_id"]
+    if thread_id is None:
+        await newchat(room_id, event_id)
+        # 记录当前会话所在的 Matrix 线程根 event_id
+        silly_tavern_server.thread_id = event_id
+        # 同时在 EventTracker 中注册该线程，供后续列出
+        event_tracker.register_thread(event_id, body[:10])
 
     replaced_event_id = None
     if content.get("m.relates_to", {}).get("rel_type") == "m.replace":
