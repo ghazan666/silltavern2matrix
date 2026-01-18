@@ -86,6 +86,9 @@ class MatrixClient(SingletonMixin):
                 "rel_type": "m.thread",
                 "event_id": thread_id,
                 "is_falling_back": True,
+                "m.in_reply_to": {
+                    "event_id": thread_id
+                },
             }
 
         response = await self.bot.room_send(

@@ -3,10 +3,38 @@ import json
 import sys
 import threading
 import time
+from functools import wraps
 from niobot import NioBot, Context, MatrixRoom, RoomMessage
 
 from configs import EnvConfig
 from services import MatrixClient, SillyTavernServer, EventTracker
+
+
+def bot_execute_command(command: str, has_args: bool = False):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(ctx: Context, *args, **kwargs):
+            # 先执行函数体，可能有额外逻辑
+            await func(ctx, *args, **kwargs)
+            # 然后构建 payload
+            payload_dict = {"type": "execute_command", "command": command, "chatId": ctx.event.event_id}
+            if has_args and args:
+                payload_dict["args"] = args[0]
+            payload = json.dumps(payload_dict)
+            await send_message_sf(payload, ctx.room.room_id)
+            await asyncio.sleep(1)
+            await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+        return wrapper
+    return decorator
+
+
+def bot_command_delete(func):
+    @wraps(func)
+    async def wrapper(ctx: Context, *args, **kwargs):
+        await func(ctx, *args, **kwargs)
+        await asyncio.sleep(1)
+        await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+    return wrapper
 
 
 logger = EnvConfig.load_logger()
@@ -24,6 +52,16 @@ event_tracker = EventTracker(matrix_client, cfg, logger)
 silly_tavern_server = SillyTavernServer(matrix_client, event_tracker, cfg, logger)
 
 
+async def newchat(room_id: str, event_id: str) -> None:
+    payload = json.dumps({"type": "execute_command", "command": "new", "chatId": event_id})
+    await send_message_sf(payload, room_id)
+
+
+async def delmessages(room_id: str, event_id: str, num: int) -> None:
+    payload = json.dumps({"type": "execute_command", "command": "del", "chatId": event_id, "args": num})
+    await send_message_sf(payload, room_id)
+
+
 async def send_message_sf(payload: str, room_id: str) -> None:
     silly_tavern_server.room_id = room_id
     message = json.loads(payload)
@@ -34,6 +72,7 @@ async def send_message_sf(payload: str, room_id: str) -> None:
     if silly_tavern_server.server and silly_tavern_server.server.state == 1:
         await silly_tavern_server.server.send(payload)
         if silly_tavern_server.thread_id is None and message.get("type", "") == "user_message":
+            await newchat(room_id, event_id)
             # 记录当前会话所在的 Matrix 线程根 event_id
             first_text = message.get("text", "")
             silly_tavern_server.thread_id = event_id
@@ -50,12 +89,8 @@ async def send_message_sf(payload: str, room_id: str) -> None:
         event_tracker.track_trash_event_id(error_event_id)
 
 
-async def delmessages(room_id: str, event_id: str, num: int) -> None:
-    payload = json.dumps({"type": "execute_command", "command": "del", "chatId": event_id, "args": num})
-    await send_message_sf(payload, room_id)
-
-
 @bot.command()
+@bot_command_delete
 async def ping(ctx: Context) -> None:
     bridgeStatus = "Bridge状态：已连接 ✅"
     stStatus = (
@@ -67,99 +102,58 @@ async def ping(ctx: Context) -> None:
     event_id = await matrix_client.send_text(f"{bridgeStatus}\n{stStatus}", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
 
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
-
 
 @bot.command()
+@bot_execute_command("imagine", has_args=True)
 async def imagegen(ctx: Context, text: str) -> None:
-    payload = json.dumps(
-        {"type": "execute_command", "command": "imagine", "chatId": ctx.event.event_id, "args": text}
-    )
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+    pass
 
 
 @bot.command()
-async def newchat(ctx: Context) -> None:
-    silly_tavern_server.thread_id = None
-    payload = json.dumps({"type": "execute_command", "command": "new", "chatId": ctx.event.event_id})
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
-
-
-@bot.command()
+@bot_execute_command("listchats")
 async def listchats(ctx: Context) -> None:
-    payload = json.dumps({"type": "execute_command", "command": "listchats", "chatId": ctx.event.event_id})
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+    pass
 
 
 @bot.command()
+@bot_execute_command("switchchat", has_args=True)
 async def switchchat(ctx: Context, inx: int) -> None:
     silly_tavern_server.thread_id = None
-    payload = json.dumps(
-        {"type": "execute_command", "command": f"switchchat_{inx}", "chatId": ctx.event.event_id}
-    )
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 
 @bot.command()
+@bot_execute_command("listchars")
 async def listchars(ctx: Context) -> None:
-    payload = json.dumps({"type": "execute_command", "command": "listchars", "chatId": ctx.event.event_id})
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+    pass
 
 
 @bot.command()
+@bot_execute_command("switchchar", has_args=True)
 async def switchchar(ctx: Context, inx: int) -> None:
-    payload = json.dumps(
-        {"type": "execute_command", "command": f"switchchar_{inx}", "chatId": ctx.event.event_id}
-    )
-    await send_message_sf(payload, ctx.room.room_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
+    pass
 
 
 @bot.command()
+@bot_execute_command("del", has_args=True)
 async def delmode(ctx: Context, num: int) -> None:
     await event_tracker.delete_events_after(
         ctx.room.room_id,
         silly_tavern_server.thread_id,
         num=num,
     )
-    await delmessages(ctx.room.room_id, ctx.event.event_id, num)
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 
 @bot.command()
+@bot_command_delete
 async def cleartrash(ctx: Context) -> None:
     await event_tracker.clear_trash_events(ctx.room.room_id)
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
-
 
 @bot.command()
+@bot_command_delete
 async def listthreads(ctx: Context) -> None:
     threads_md = event_tracker.list_threads_markdown()
     event_id = await matrix_client.send_text(f"已知会话线程列表：\n{threads_md}", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
-
-    await asyncio.sleep(1)
-    await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
 
 
 @bot.command()
@@ -180,7 +174,7 @@ async def removethread(ctx: Context, thread_id: str) -> None:
     event_id = await matrix_client.send_text("已删除线程ID。", ctx.room.room_id)
     event_tracker.track_trash_event_id(event_id)
 
-    await newchat(ctx)
+    await newchat(ctx.room.room_id, ctx.event.event_id)
 
     await asyncio.sleep(1)
     await matrix_client.delete_text(ctx.room.room_id, ctx.event.event_id)
@@ -197,12 +191,12 @@ async def on_message(room: MatrixRoom, event: RoomMessage):
     # 忽略bot发出的message
     if sender == cfg.mx_user_id:
         return
+    if content.get("msgtype", "") != "m.text":
+        return
     if not body:
         return
     # 系统命令由服务器直接处理
     if body.startswith("!"):
-        return
-    if content.get("msgtype", "") != "m.text":
         return
     if event_tracker.has_tracked(event_id):
         return
