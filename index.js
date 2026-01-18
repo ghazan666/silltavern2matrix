@@ -390,10 +390,8 @@ jQuery(async () => {
         $('#telegram_connect_button').on('click', connect);
         $('#telegram_disconnect_button').on('click', disconnect);
 
-        if (settings.autoConnect) {
-            console.log('[Telegram Bridge] 自动连接已启用，正在连接...');
-            connect();
-        }
+        // 每30秒尝试连接一次
+        setInterval(connect, 30000);
 
     } catch (error) {
         console.error('[Telegram Bridge] 加载设置 HTML 失败。', error);
