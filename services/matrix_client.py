@@ -5,7 +5,6 @@ import mimetypes
 from dataclasses import dataclass, field
 from io import BytesIO
 from typing import Any, Dict
-from mistune import create_markdown
 from niobot import NioBot, UploadResponse
 
 from utils import SingletonMixin
@@ -77,12 +76,11 @@ class MatrixClient(SingletonMixin):
             return await self._run_in_matrix_loop(self._send_text(text, room_id, thread_id, html))
 
     async def _send_text(self, text: str, room_id: str, thread_id: str | None = None, html: str | None = None) -> str:
-        md = create_markdown(plugins=['table'])
         content = {
             "msgtype": "m.text",
             "body": text,
             "format": "org.matrix.custom.html",
-            "formatted_body": html if html else md(text),
+            "formatted_body": html if html else text,
         }
         if thread_id:
             content["m.relates_to"] = {
@@ -108,13 +106,7 @@ class MatrixClient(SingletonMixin):
             return await self._run_in_matrix_loop(self._edit_text(text, room_id, event_id, html))
 
     async def _edit_text(self, text: str, room_id: str, event_id: str, html: str | None = None) -> str:
-        md = create_markdown(plugins=['table'])
-        response = await self.bot.edit_message(room=room_id, message=event_id, content={
-            "msgtype": "m.text",
-            "body": text,
-            "format": "org.matrix.custom.html",
-            "formatted_body": html if html else md(text),
-        })
+        response = await self.bot.edit_message(room=room_id, message=event_id, content=html if html else text)
 
         return getattr(response, "event_id", "")
 
